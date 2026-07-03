@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The All Chess Club</title>
+
+<!-- 引入 Google 字型（網頁排版與文字造型使用） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- 引入開源的西洋棋核心邏輯庫 chess.js（用來判斷規則、步法與勝負） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
+
+<style>
+  /* 定義全域變數（主題顏色與設定，方便後面重複使用） */
+  :root{
+    --ink:        #1B1712;  /* 極深咖啡黑（背景底色） */
+    --ink-soft:   #26201A;  /* 稍微淺一點的黑（輸入框背景） */
+    --card:       #2E2620;  /* 卡片背景色 */
+    --ivory:      #EDE0C8;  /* 象牙白（棋盤白格、白棋邊框） */
+    --walnut:     #7C5738;  /* 胡桃木色（棋盤黑格） */
+    --walnut-dk:  #5C4028;  /* 深胡桃木（棋盤外框） */
+    --brass:      #B08D57;  /* 黃銅色（主要按鈕、選取框） */
+    --brass-lt:   #D9BD86;  /* 淺黃銅色（標題、滑鼠懸停效果） */
+    --text:       #F2EAD8;  /* 主要文字顏色（米白） */
+    --text-muted: #9C8E78;  /* 內文輔助灰字（提示、次要資訊） */
+    --danger:     #B0553F;  /* 警告/錯誤紅色（將死、警示） */
+    --good:       #7C9A6E;  /* 成功/綠色（輪到你走棋） */
+    --radius:     6px;      /* 基礎圓角大小 */
+  }
+
+  /* 基礎設定：讓所有元素的寬高計算都包含邊框（內襯不撐開網頁） */
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  /* 網頁整體外觀與動態漸層背景 */
+  body{
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #2A2118 0%, transparent 60%),
+      radial-gradient(1000px 600px at 100% 110%, #241D16 0%, transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+  }
+
+  /* 頂部商標區 */
+  .wordmark{
+    text-align:center;
+    margin-bottom:28px;
+  }
+  .wordmark .glyph{
+    font-family:'Fraunces',serif;
+    font-size:clamp(26px, 5vw, 38px); /* 根據螢幕大小自動縮放字體 */
+    font-weight:600;
+    letter-spacing:1px;
+    color:var(--brass-lt);
+    line-height:1;
+  }
+  .wordmark .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:3px;
+    text-transform:uppercase; /* 自動轉大寫 */
+    color:var(--text-muted);
+    margin-top:6px;
+  }
+
+  /* ---------- 大廳（房間選單卡片） ---------- */
+  .lobby{
+    width:100%;
+    max-width:420px;
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+    padding:28px 26px 26px;
+    box-shadow:0 20px 50px -20px rgba(0,0,0,.6); /* 精緻陰影 */
+    position:relative;
+    overflow:hidden;
+  }
+  /* 卡片上方的精緻亮條裝飾 */
+  .lobby::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:3px;
+    background:linear-gradient(90deg, transparent, var(--brass), transparent);
+  }
+  .lobby h2{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:20px;
+    margin:0 0 4px;
+    color:var(--text);
+  }
+  .lobby p.hint{
+    font-size:13px;
+    color:var(--text-muted);
+    margin:0 0 20px;
+    line-height:1.6;
+  }
+  /* 大廳的分頁按鈕列 */
+  .lobby-tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+  }
+  .lobby-tab{
+    flex:1;
+    padding:9px 0;
+    text-align:center;
+    font-size:13px;
+    letter-spacing:.5px;
+    border:1px solid #4A3D2E;
+    border-radius:20px;
+    cursor:pointer;
+    color:var(--text-muted);
+    transition:.15s;
+    background:transparent;
+    font-family:'Inter',sans-serif;
+  }
+  /* 當前選中的分頁樣式 */
+  .lobby-tab.active{
+    background:var(--brass);
+    color:var(--ink);
+    border-color:var(--brass);
+    font-weight:600;
+  }
+  /* 輸入區域預設隱藏，有 .active 才會顯示 */
+  .field{ display:none; }
+  .field.active{ display:block; }
+
+  /* 代碼輸入框 */
+  input[type=text]{
+    width:100%;
+    background:var(--ink-soft);
+    border:1px solid #4A3D2E;
+    color:var(--text);
+    padding:12px 14px;
+    border-radius:var(--radius);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:16px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    text-align:center;
+    margin-bottom:14px;
+  }
+  input[type=text]:focus{ outline:1px solid var(--brass); border-color:var(--brass); }
+
+  /* 通用按鈕樣式 */
+  .btn{
+    width:100%;
+    padding:12px 0;
+    border-radius:var(--radius);
+    border:none;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:.5px;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+    transition:.15s;
+  }
+  .btn-primary{ background:var(--brass); color:var(--ink); }
+  .btn-primary:hover{ background:var(--brass-lt); }
+  .btn-ghost{
+    background:transparent;
+    color:var(--text-muted);
+    border:1px solid #4A3D2E;
+  }
+  .btn-ghost:hover{ color:var(--text); border-color:var(--brass); }
+
+  /* 大廳錯誤或提示訊息區域 */
+  .lobby-msg{
+    margin-top:14px;
+    font-size:12.5px;
+    color:var(--danger);
+    min-height:16px;
+    text-align:center;
+  }
+
+  /* ---------- 遊戲畫面佈局 ---------- */
+  .game-wrap{
+    display:none; /* 預設不顯示，開局後透過 JS 切換成 active */
+    width:100%;
+    max-width:900px;
+    gap:24px;
+  }
+  .game-wrap.active{ display:flex; }
+  /* 行動裝置或窄螢幕時，改為上下排列 */
+  @media (max-width:760px){
+    .game-wrap.active{ flex-direction:column; align-items:center; }
+  }
+
+  .board-col{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+
+  /* 房間號碼牌 */
+  .room-plaque{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    padding:8px 14px;
+    border-radius:20px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .room-plaque .code{
+    letter-spacing:4px;
+    font-weight:600;
+    color:var(--brass-lt);
+    font-size:14px;
+  }
+  .room-plaque button{
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    cursor:pointer;
+    font-size:12px;
+    font-family:'Inter',sans-serif;
+    text-decoration:underline;
+  }
+  .room-plaque button:hover{ color:var(--text); }
+
+  /* 棋盤網格主體 */
+  .board{
+    width:min(88vw, 480px);  /* 確保在小螢幕上不會爆開 */
+    height:min(88vw, 480px);
+    display:grid;
+    grid-template-columns:repeat(8,1fr); /* 橫向 8 格 */
+    grid-template-rows:repeat(8,1fr);    /* 縱向 8 格 */
+    border:10px solid var(--walnut-dk);
+    border-radius:4px;
+    box-shadow:0 24px 60px -24px rgba(0,0,0,.7);
+    position:relative;
+  }
+  /* 單個棋格 */
+  .sq{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:clamp(24px, 6.5vw, 40px); /* 棋子符號大小隨螢幕調整 */
+    cursor:pointer;
+    user-select:none; /* 防止點擊時誤選文字 */
+  }
+  .sq.light{ background:var(--ivory); }
+  .sq.dark{ background:var(--walnut); }
+
+  /* 棋子本身的顏色與陰影 */
+  .sq .piece-w{ color:#FBF6EA; filter:drop-shadow(0 2px 1px rgba(0,0,0,.55)); }
+  .sq .piece-b{ color:#1B1712; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+
+  /* 特殊棋格狀態（選取、上一步、可移動提示） */
+  .sq.selected{ box-shadow:inset 0 0 0 3px var(--brass); } /* 目前選中的格子 */
+  .sq.last-move{ box-shadow:inset 0 0 0 3px rgba(176,141,87,.55); } /* 上一步走過的格子 */
+  .sq .dot{ /* 可移動到的空地（小圓點） */
+    position:absolute;
+    width:26%; height:26%;
+    border-radius:50%;
+    background:rgba(176,141,87,.75);
+    pointer-events:none;
+  }
+  .sq .ring{ /* 可吃掉對手棋子的提示（大圓圈） */
+    position:absolute;
+    width:88%; height:88%;
+    border-radius:50%;
+    box-shadow:inset 0 0 0 4px rgba(176,141,87,.65);
+    pointer-events:none;
+  }
+
+  /* 棋盤邊緣的座標標籤（a-h, 1-8） */
+  .coord{
+    position:absolute;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;
+    color:rgba(0,0,0,.35);
+    pointer-events:none;
+  }
+  .coord.file{ bottom:2px; right:4px; }
+  .coord.rank{ top:2px; left:3px; }
+
+  /* 狀態提示列（輪到誰、贏家是誰） */
+  .status-bar{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    letter-spacing:.5px;
+    color:var(--text-muted);
+    min-height:18px;
+    text-align:center;
+  }
+  .status-bar.turn-you{ color:var(--good); }
+  .status-bar.turn-opp{ color:var(--text-muted); }
+  .status-bar.alert{ color:var(--danger); }
+
+  /* ---------- 側邊資訊面板 ---------- */
+  .side{
+    flex:1;
+    min-width:240px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+    padding:16px 18px;
+  }
+  .panel h3{
+    font-family:'Fraunces',serif;
+    font-size:13px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--brass-lt);
+    margin:0 0 12px;
+    font-weight:600;
+  }
+  .players{ display:flex; flex-direction:column; gap:10px; }
+  .player-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:14px;
+  }
+  .player-row .name{ display:flex; align-items:center; gap:8px; }
+  /* 區分黑白方的圓點圖示 */
+  .player-row .swatch{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--ivory);
+    box-shadow:0 0 0 1px var(--walnut-dk);
+  }
+  .player-row .swatch.black{ background:#1B1712; box-shadow:0 0 0 1px var(--brass); }
+  .player-row .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--text-muted);
+    padding:2px 8px;
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+  }
+
+  /* 吃子統計區域 */
+  .captured{
+    font-size:18px;
+    min-height:20px;
+    letter-spacing:2px;
+    color:var(--text-muted);
+  }
+
+  /* 歷史棋步紀錄清單 */
+  .history{
+    max-height:220px;
+    overflow-y:auto; /* 超出高度時顯示滾動條 */
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    line-height:1.9;
+  }
+  /* 滾動條樣式美化 */
+  .history::-webkit-scrollbar{ width:6px; }
+  .history::-webkit-scrollbar-thumb{ background:#4A3D2E; border-radius:3px; }
+  .history .row{ display:flex; gap:8px; color:var(--text-muted); }
+  .history .row .n{ width:24px; color:#6B5D48; } /* 手數編號顏色 */
+  .history .row .mv{ width:60px; color:var(--text); } /* 棋步代碼顏色 */
+  .history .empty{ color:#6B5D48; font-style:italic; }
+
+  .side-actions{ display:flex; flex-direction:column; gap:8px; }
+</style>
+</head>
+<body>
+
+  <!-- 頁面頂部商標 -->
+  <div class="wordmark">
+    <div class="glyph">The All Chess Club</div>
+    <div class="sub">線上西洋棋對弈室 · Demo</div>
+  </div>
+
+  <!-- 大廳介面區 -->
+  <div class="lobby" id="lobby">
+    <h2>開始一局對弈</h2>
+    <p class="hint">建立房間後，把 4 碼房間代碼傳給朋友，對方輸入代碼即可加入，棋步會自動同步。此房間代碼會被暫存於此裝置的瀏覽資料，任何知道代碼的人都能加入，僅供 Demo 測試使用。</p>
+
+    <!-- 分頁選單切換按鈕 -->
+    <div class="lobby-tabs">
+      <div class="lobby-tab active" id="tabCreate">建立房間</div>
+      <div class="lobby-tab" id="tabJoin">加入房間</div>
+      <div class="lobby-tab" id="tabLocal">本地對戰</div>
+    </div>
+
+    <!-- 建立房間分頁內容 -->
+    <div class="field active" id="fieldCreate">
+      <button class="btn btn-primary" id="btnCreate">建立新房間，執白先手</button>
+    </div>
+    <!-- 加入房間分頁內容 -->
+    <div class="field" id="fieldJoin">
+      <input type="text" id="joinCode" maxlength="4" placeholder="輸入 4 碼房間代碼">
+      <button class="btn btn-primary" id="btnJoin">加入房間，執黑後手</button>
+    </div>
+    <!-- 本地雙人分頁內容 -->
+    <div class="field" id="fieldLocal">
+      <p class="hint" style="margin-top:-4px;">雙方輪流使用同一台裝置下棋，不需要網路同步，適合面對面對弈。</p>
+      <button class="btn btn-primary" id="btnLocal">開始本地對戰</button>
+    </div>
+
+    <!-- 訊息提示區域 -->
+    <div class="lobby-msg" id="lobbyMsg"></div>
+  </div>
+
+  <!-- 遊戲主畫面區 -->
+  <div class="game-wrap" id="gameWrap">
+    <!-- 左側：棋盤與房間資訊 -->
+    <div class="board-col">
+      <div class="room-plaque">
+        <span>房間</span><span class="code" id="roomCodeLabel">----</span>
+        <button id="copyCodeBtn">複製</button>
+      </div>
+      <!-- 棋盤本體（稍後由 JS 動態生成格子） -->
+      <div class="board" id="board"></div>
+      <!-- 目前賽局狀態提示 -->
+      <div class="status-bar" id="statusBar">等待對手加入…</div>
+    </div>
+
+    <!-- 右側：側邊資訊欄 -->
+    <div class="side">
+      <!-- 玩家資訊 -->
+      <div class="panel">
+        <h3>對弈雙方</h3>
+        <div class="players">
+          <div class="player-row">
+            <span class="name"><span class="swatch"></span>白方</span>
+            <span class="tag" id="whiteTag">—</span>
+          </div>
+          <div class="player-row">
+            <span class="name"><span class="swatch black"></span>黑方</span>
+            <span class="tag" id="blackTag">等待中</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 損子統計 -->
+      <div class="panel">
+        <h3>被吃掉的棋子</h3>
+        <div class="captured" id="capturedWhite">白方吃掉:—</div>
+        <div class="captured" id="capturedBlack">黑方吃掉:—</div>
+      </div>
+
+      <!-- 棋步歷程 -->
+      <div class="panel">
+        <h3>棋步紀錄</h3>
+        <div class="history" id="history"><div class="empty">尚無棋步</div></div>
+      </div>
+
+      <!-- 功能按鈕 -->
+      <div class="panel side-actions">
+        <button class="btn btn-ghost" id="btnRematch">再來一局(同房間)</button>
+        <button class="btn btn-ghost" id="btnLeave">離開房間</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // 西洋棋子對應的 Unicode 圖形符號（w=白棋, b=黑棋；p=兵, n=馬, b=象, r=車, q=后, k=王）
+  const PIECE_UNICODE = {
+    w:{p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'},
+    b:{p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'}
+  };
+  // 棋盤直行的欄位代號
+  const FILES = ['a','b','c','d','e','f','g','h'];
+
+  // 初始化變數
+  let myId = 'p_' + Math.random().toString(36).slice(2,10); // 隨機生成玩家的唯一 ID
+  let myColor = null;        // 記錄自己的陣營：'w'(白) | 'b'(黑) | 'local'(本地)
+  let roomCode = null;       // 房間代碼
+  let game = new Chess();    // 實例化 chess.js 核心邏輯物件
+  let selectedSq = null;     // 目前滑鼠點選選中的棋格
+  let legalTargets = [];     // 目前選中棋子所有可合法移動的目標棋格
+  let lastMove = null;       // 記錄上一步棋是從哪走到哪，用於高亮顯示
+  let pollTimer = null;      // 用於輪詢（每隔一段時間跟後端/暫存同步資料）的計時器
+  let lastSeenUpdate = 0;    // 記錄最後一次資料同步的時間戳記
+  let syncing = false;       // 防止重複觸發網路同步的鎖定狀態標記
+
+  // ---------- 模擬雲端/本地儲存的非同步小幫手（這部分通常由外部物件 window.storage 支援） ----------
+  async function getRoom(code){
+    try{
+      const res = await window.storage.get('room:' + code, true);
+      return res ? JSON.parse(res.value) : null;
+    }catch(e){ return null; }
+  }
+  async function setRoom(code, data){
+    try{
+      data.updatedAt = Date.now(); // 蓋上最新時間戳記
+      await window.storage.set('room:' + code, JSON.stringify(data), true);
+      return data;
+    }catch(e){ console.error('儲存房間資料失敗', e); return null; }
+  }
+
+  // 產生隨機 4 碼的英數字房間代碼
+  function genCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 排除易混淆字元如 I, O, 1, 0
+    let c = '';
+    for(let i=0;i<4;i++) c += chars[Math.floor(Math.random()*chars.length)];
+    return c;
+  }
+
+  // ---------- 大廳分頁切換邏輯 ----------
+  const tabCreate = document.getElementById('tabCreate');
+  const tabJoin = document.getElementById('tabJoin');
+  const tabLocal = document.getElementById('tabLocal');
+  const fieldCreate = document.getElementById('fieldCreate');
+  const fieldJoin = document.getElementById('fieldJoin');
+  const fieldLocal = document.getElementById('fieldLocal');
+  const lobbyMsg = document.getElementById('lobbyMsg');
+  const allTabs = [tabCreate, tabJoin, tabLocal];
+  const allFields = [fieldCreate, fieldJoin, fieldLocal];
+
+  // 切換大廳畫面的分頁顯示
+  function selectTab(tab, field){
+    allTabs.forEach(t=>t.classList.remove('active'));
+    allFields.forEach(f=>f.classList.remove('active'));
+    tab.classList.add('active');
+    field.classList.add('active');
+    lobbyMsg.textContent = ''; // 切換分頁時清空錯誤提示訊息
+  }
+  tabCreate.onclick = () => selectTab(tabCreate, fieldCreate);
+  tabJoin.onclick = () => selectTab(tabJoin, fieldJoin);
+  tabLocal.onclick = () => selectTab(tabLocal, fieldLocal);
+
+  // 點擊「建立房間」按鈕
+  document.getElementById('btnCreate').onclick = async () => {
+    lobbyMsg.textContent = '建立房間中…';
+    const code = genCode();
+    const data = {
+      fen: new Chess().fen(), // 取得開局時的標準棋盤狀態字串（FEN 格式）
+      whiteId: myId,          // 建立者預設執白
+      blackId: null,          // 黑方等候中
+      history: [],
+      status: 'waiting',      // 房間狀態：等候對手
+      winner: null
+    };
+    const saved = await setRoom(code, data);
+    if(!saved){ lobbyMsg.textContent = '建立失敗，請再試一次。'; return; }
+    roomCode = code;
+    myColor = 'w';
+    enterGame(); // 進入遊戲畫面
+  };
+
+  // 點擊「加入房間」按鈕
+  document.getElementById('btnJoin').onclick = async () => {
+    const input = document.getElementById('joinCode');
+    const code = input.value.trim().toUpperCase();
+    if(code.length !== 4){ lobbyMsg.textContent = '請輸入 4 碼房間代碼。'; return; }
+    lobbyMsg.textContent = '加入中…';
+    const room = await getRoom(code);
+    if(!room){ lobbyMsg.textContent = '找不到這個房間代碼。'; return; }
+    
+    // 檢查房間是否已滿
+    if(room.blackId && room.blackId !== myId && room.whiteId !== myId){
+      lobbyMsg.textContent = '房間已滿。';
+      return;
+    }
+    // 如果房間還沒有黑方，則自動將自己加入為黑方
+    if(!room.blackId){
+      room.blackId = myId;
+      room.status = 'playing'; // 修改房間狀態為：比賽中
+      await setRoom(code, room);
+    }
+    roomCode = code;
+    myColor = 'b'; // 執黑
+    enterGame();
+  };
+
+  // 自動將輸入框內英文字母轉為大寫
+  document.getElementById('joinCode').addEventListener('input', (e)=>{
+    e.target.value = e.target.value.toUpperCase();
+  });
+
+  // 點擊「開始本地對戰」按鈕
+  document.getElementById('btnLocal').onclick = () => {
+    roomCode = null;
+    myColor = 'local';
+    game = new Chess();
+    enterGame();
+  };
+
+  // ---------- 進入遊戲畫面與計時器管理 ----------
+  function enterGame(){
+    document.getElementById('lobby').style.display = 'none'; // 隱藏大廳
+    document.getElementById('gameWrap').classList.add('active'); // 顯示遊戲介面
+    buildBoardSkeleton(); // 繪製棋盤格子
+
+    // 本地對戰模式特別設定
+    if(myColor === 'local'){
+      document.querySelector('.room-plaque').style.display = 'none'; // 隱藏房號牌
+      document.querySelector('.players').closest('.panel').style.display = 'none'; // 隱藏線上玩家狀態
+      lastMove = null;
+      selectedSq = null; legalTargets = [];
+      renderBoard(); // 刷新畫面
+      return;
+    }
+
+    // 線上對戰模式設定
+    document.getElementById('roomCodeLabel').textContent = roomCode;
+    syncFromRoom(true); // 首次強制同步房間狀態
+    pollTimer = setInterval(()=>syncFromRoom(false), 1500); // 隨後每 1.5 秒自動拉取一次最新數據
+  }
+
+  // 點擊複製房間號碼的功能
+  document.getElementById('copyCodeBtn').onclick = () => {
+    navigator.clipboard.writeText(roomCode).then(()=>{
+      const btn = document.getElementById('copyCodeBtn');
+      const old = btn.textContent;
+      btn.textContent = '已複製';
+      setTimeout(()=>btn.textContent = old, 1200); // 1.2秒後恢復字樣
+    });
+  };
+
+  // 離開房間
+  document.getElementById('btnLeave').onclick = () => {
+    clearInterval(pollTimer); // 停止定時器防記憶體洩漏
+    location.reload();        // 重新整理網頁回到起點
+  };
+
+  // 再來一局功能（僅限白方可以主導重開）
+  document.getElementById('btnRematch').onclick = async () => {
+    if(myColor === 'local'){
+      game = new Chess();
+      lastMove = null;
+      selectedSq = null; legalTargets = [];
+      renderBoard();
+      return;
+    }
+    if(myColor !== 'w') return; // 如果是線上對局，只有白方(開房者)能重置新局
+    const room = await getRoom(roomCode);
+    if(!room) return;
+    room.fen = new Chess().fen(); // 重置為初始棋盤字串
+    room.history = [];
+    room.status = 'playing';
+    room.winner = null;
+    await setRoom(roomCode, room);
+    syncFromRoom(true); // 強制同步
+  };
+
+  // ---------- 棋盤格子骨架動態生成 ----------
+  const boardEl = document.getElementById('board');
+  function buildBoardSkeleton(){
+    boardEl.innerHTML = '';
+    const flip = myColor === 'b'; // 如果自己執黑，將棋盤反轉過來顯示（由黑方視角看棋盤）
+    
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const rank = flip ? r+1 : 8-r;       // 計算目前格子的橫排（1-8）
+        const fileIdx = flip ? 7-c : c;      // 計算目前格子的直行索引
+        const file = FILES[fileIdx];         // 取得 a-h 字元
+        const sqName = file + rank;          // 組合出格子座標例如 "e4"
+        
+        const div = document.createElement('div');
+        // 計算格子是奇數還偶數，以此分配白格或黑格樣式
+        div.className = 'sq ' + (((r+c)%2===0) ? 'light' : 'dark');
+        div.dataset.sq = sqName; // 將座標存進資料屬性中
+        div.onclick = () => onSquareClick(sqName); // 綁定點擊事件
+        
+        // 幫棋盤最左欄加上數字座標提示
+        if(c===0){
+          const rk = document.createElement('span');
+          rk.className = 'coord rank'; rk.textContent = rank;
+          div.appendChild(rk);
+        }
+        // 幫棋盤最底列加上英文字母座標提示
+        if(r===7){
+          const fl = document.createElement('span');
+          fl.className = 'coord file'; fl.textContent = file;
+          div.appendChild(fl);
+        }
+        boardEl.appendChild(div);
+      }
+    }
+  }
+
+  // ---------- 畫面渲染更新（依據邏輯狀態重新繪製棋子與提示） ----------
+  function renderBoard(){
+    const board = game.board(); // 從 chess.js 取得目前的 8x8 二維陣列棋盤快照
+    
+    document.querySelectorAll('.sq').forEach(sqEl=>{
+      // 清理舊的棋子、小點和圓圈提示，避免重複累加
+      sqEl.querySelectorAll('.piece-w,.piece-b,.dot,.ring').forEach(n=>n.remove());
+      sqEl.classList.remove('selected','last-move');
+      
+      const sqName = sqEl.dataset.sq;
+      const file = sqName[0];
+      const rank = parseInt(sqName[1],10);
+      const col = FILES.indexOf(file);
+      const row = 8 - rank;
+      const piece = board[row][col]; // 找到此座標對應的棋子結構
+      
+      // 1. 如果格子上有棋子，塞入對應的 Unicode 棋子字元
+      if(piece){
+        const span = document.createElement('span');
+        span.className = piece.color === 'w' ? 'piece-w' : 'piece-b';
+        span.textContent = PIECE_UNICODE[piece.color][piece.type];
+        sqEl.appendChild(span);
+      }
+      // 2. 如果是上一步移動路徑的起點或終點，加上特殊陰影框
+      if(lastMove && (sqName === lastMove.from || sqName === lastMove.to)){
+        sqEl.classList.add('last-move');
+      }
+      // 3. 高亮顯示目前選中的格子
+      if(selectedSq === sqName) sqEl.classList.add('selected');
+      
+      // 4. 如果是目前選中棋子可以移動到的合法目標，顯示點或圈的提示
+      if(legalTargets.includes(sqName)){
+        const marker = document.createElement('div');
+        const hasPiece = !!piece;
+        marker.className = hasPiece ? 'ring' : 'dot'; // 有敵機顯大圈（代表吃子），空地顯小點
+        sqEl.appendChild(marker);
+      }
+    });
+
+    // 連動更新其餘側邊面板與狀態欄的 UI 顯示
+    updateStatusBar();
+    updateCaptured();
+    updateHistory();
+    updatePlayers();
+  }
+
+  // ---------- 點擊棋格的交互邏輯 ----------
+  function onSquareClick(sqName){
+    if(!myColor) return;
+    if(game.game_over()) return; // 局賽已結束則不反應
+    
+    // 本地模式由目前該走棋的一方操作，線上模式則鎖定為你自己的顏色
+    const controllable = myColor === 'local' ? game.turn() : myColor;
+    if(game.turn() !== controllable) return; // 如果不是你的回合，不理會點擊
+
+    const piece = game.get(sqName); // 檢查這格有沒有棋子
+
+    // 如果之前已經選中了某個棋格
+    if(selectedSq){
+      // 且現在點擊的這格是合法移動目標之一，就執行移動！
+      if(legalTargets.includes(sqName)){
+        makeMove(selectedSq, sqName);
+        selectedSq = null; legalTargets = [];
+        renderBoard();
+        return;
+      }
+    }
+    
+    // 如果點選的是自己的棋子，就切換為選取狀態，並透過 chess.js 計算出所有合法的落子目標
+    if(piece && piece.color === controllable){
+      selectedSq = sqName;
+      legalTargets = game.moves({square:sqName, verbose:true}).map(m=>m.to);
+    }else{
+      // 點擊空地或對手棋子（且無法吃子時），取消選取
+      selectedSq = null; legalTargets = [];
+    }
+    renderBoard();
+  }
+
+  // 實際執行棋步移動的邏輯
+  async function makeMove(from, to){
+    const moveObj = { from, to, promotion:'q' }; // 兵走到對面底線時，一律自動升變為「后(Queen)」
+    const result = game.move(moveObj);
+    if(!result) return; // 若不符合規則移動失敗，直接跳出
+    
+    lastMove = { from, to }; // 記錄這一步，供高亮顯示使用
+    renderBoard();
+
+    if(myColor === 'local') return; // 本地對戰不需要將棋步同步至雲端
+
+    // 線上對局：將下完的最新局面打包同步回儲存空間
+    const room = await getRoom(roomCode) || {};
+    room.fen = game.fen();
+    room.history = game.history();
+    room.status = game.game_over() ? 'finished' : 'playing';
+    
+    // 檢查是否判出勝負
+    if(game.in_checkmate()){
+      room.winner = (game.turn() === 'w') ? 'black' : 'white';
+    }else if(game.game_over()){
+      room.winner = 'draw'; // 和局（如逼和、三次重複局面等）
+    }
+    await setRoom(roomCode, room);
+  }
+
+  // ---------- 從房間數據同步回網頁（線上對局的核心：定時同步） ----------
+  async function syncFromRoom(force){
+    if(syncing) return;
+    syncing = true;
+    const room = await getRoom(roomCode);
+    syncing = false;
+    if(!room) return;
+
+    // 檢查是否有新的局面更新（透過 updatedAt 時間戳記對比）
+    if(force || room.updatedAt !== lastSeenUpdate){
+      lastSeenUpdate = room.updatedAt || 0;
+      
+      // 如果資料庫局面跟本地局面不同，同步本地局面
+      if(room.fen !== game.fen()){
+        game = new Chess(room.fen); // 用 FEN 字串直接重建模擬棋盤
+        const hist = room.history || [];
+        if(hist.length){
+          // 為了能在同步對手棋步時，也能高亮顯示對手走了哪一格
+          // 這邊用一個臨時的棋盤把歷史紀錄重新走一遍，藉此推算出對手最後一步的起點與終點
+          const tmp = new Chess();
+          let lm = null;
+          hist.forEach(san=>{ lm = tmp.move(san); });
+          lastMove = lm ? {from:lm.from, to:lm.to} : null;
+        }else{
+          lastMove = null;
+        }
+      }
+      window.__lastRoom = room; // 快照一份存於全域空間，供其他元件讀取狀態
+      selectedSq = null; legalTargets = [];
+      renderBoard(); // 刷新網頁棋盤
+    }
+  }
+
+  // ---------- 剩餘周邊 UI 面板的細節刷新函式 ----------
+  
+  // 更新下方長條狀態欄的文字提示
+  function updateStatusBar(){
+    const bar = document.getElementById('statusBar');
+    const room = window.__lastRoom;
+    bar.classList.remove('turn-you','turn-opp','alert');
+
+    if(room && room.status === 'waiting'){
+      bar.textContent = '等待對手加入…';
+      return;
+    }
+    if(game.in_checkmate()){
+      const winner = game.turn() === 'w' ? '黑方' : '白方';
+      bar.textContent = `將死! ${winner} 獲勝`;
+      bar.classList.add('alert');
+      return;
+    }
+    if(game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()){
+      bar.textContent = '和局';
+      bar.classList.add('alert');
+      return;
+    }
+    const turn = game.turn();
+    const turnLabel = turn === 'w' ? '白方' : '黑方';
+    let text = `輪到 ${turnLabel} 走棋`;
+    if(game.in_check()) text += ' (將軍!)';
+    
+    if(myColor === 'local'){
+      bar.textContent = text;
+      bar.classList.add('turn-you');
+    }else{
+      const isMyTurn = turn === myColor;
+      bar.textContent = isMyTurn ? `${text} — 該你了` : text;
+      bar.classList.add(isMyTurn ? 'turn-you' : 'turn-opp');
+    }
+  }
+
+  // 更新被吃掉的棋子統計
+  function updateCaptured(){
+    const hist = game.history({verbose:true});
+    const takenByWhite = []; // 白方吃掉的黑棋複製品
+    const takenByBlack = []; // 黑方吃掉的白棋複製品
+    
+    hist.forEach(m=>{
+      if(m.captured){
+        // 取得被吃掉棋子的圖形符號
+        const glyph = PIECE_UNICODE[m.color === 'w' ? 'b' : 'w'][m.captured];
+        if(m.color === 'w') takenByWhite.push(glyph); else takenByBlack.push(glyph);
+      }
+    });
+    document.getElementById('capturedWhite').textContent = '白方吃掉: ' + (takenByWhite.join(' ') || '—');
+    document.getElementById('capturedBlack').textContent = '黑方吃掉: ' + (takenByBlack.join(' ') || '—');
+  }
+
+  // 更新右側面板的標準記譜歷史紀錄清單
+  function updateHistory(){
+    const el = document.getElementById('history');
+    const hist = game.history(); // 取得如 ["e4", "e5", "Nf3", "Nc6"] 形式的標準記譜陣列
+    if(!hist.length){ el.innerHTML = '<div class="empty">尚無棋步</div>'; return; }
+    
+    let html = '';
+    for(let i=0;i<hist.length;i+=2){
+      const n = (i/2)+1;     // 回合數編號
+      const w = hist[i] || '';   // 白方棋步
+      const b = hist[i+1] || ''; // 黑方棋步
+      html += `<div class="row"><span class="n">${n}.</span><span class="mv">${w}</span><span class="mv">${b}</span></div>`;
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight; // 自動將滾動條拉到最底部以查看最新棋步
+  }
+
+  // 更新玩家標籤（顯示「你」、「玩家」或「等待中」）
+  function updatePlayers(){
+    const room = window.__lastRoom;
+    if(!room) return;
+    document.getElementById('whiteTag').textContent = room.whiteId ? (room.whiteId===myId ? '你' : '玩家') : '—';
+    document.getElementById('blackTag').textContent = room.blackId ? (room.blackId===myId ? '你' : '玩家') : '等待中';
+  }
+
+})();
+</script>
+</body>
+</html>
