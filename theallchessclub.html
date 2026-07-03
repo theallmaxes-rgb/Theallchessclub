@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The All Chess Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
+<style>
+  :root{
+    --ink:        #1B1712;
+    --ink-soft:   #26201A;
+    --card:       #2E2620;
+    --ivory:      #EDE0C8;
+    --walnut:     #7C5738;
+    --walnut-dk:  #5C4028;
+    --brass:      #B08D57;
+    --brass-lt:   #D9BD86;
+    --text:       #F2EAD8;
+    --text-muted: #9C8E78;
+    --danger:     #B0553F;
+    --good:       #7C9A6E;
+    --radius:     6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #2A2118 0%, transparent 60%),
+      radial-gradient(1000px 600px at 100% 110%, #241D16 0%, transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+  }
+
+  .wordmark{
+    text-align:center;
+    margin-bottom:28px;
+  }
+  .wordmark .glyph{
+    font-family:'Fraunces',serif;
+    font-size:clamp(26px, 5vw, 38px);
+    font-weight:600;
+    letter-spacing:1px;
+    color:var(--brass-lt);
+    line-height:1;
+  }
+  .wordmark .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    color:var(--text-muted);
+    margin-top:6px;
+  }
+
+  /* ---------- Lobby ---------- */
+  .lobby{
+    width:100%;
+    max-width:420px;
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+    padding:28px 26px 26px;
+    box-shadow:0 20px 50px -20px rgba(0,0,0,.6);
+    position:relative;
+    overflow:hidden;
+  }
+  .lobby::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:3px;
+    background:linear-gradient(90deg, transparent, var(--brass), transparent);
+  }
+  .lobby h2{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:20px;
+    margin:0 0 4px;
+    color:var(--text);
+  }
+  .lobby p.hint{
+    font-size:13px;
+    color:var(--text-muted);
+    margin:0 0 20px;
+    line-height:1.6;
+  }
+  .lobby-tabs{
+    display:flex;
+    gap:8px;
+    margin-bottom:18px;
+  }
+  .lobby-tab{
+    flex:1;
+    padding:9px 0;
+    text-align:center;
+    font-size:13px;
+    letter-spacing:.5px;
+    border:1px solid #4A3D2E;
+    border-radius:20px;
+    cursor:pointer;
+    color:var(--text-muted);
+    transition:.15s;
+    background:transparent;
+    font-family:'Inter',sans-serif;
+  }
+  .lobby-tab.active{
+    background:var(--brass);
+    color:var(--ink);
+    border-color:var(--brass);
+    font-weight:600;
+  }
+  .field{
+    display:none;
+  }
+  .field.active{display:block;}
+  input[type=text]{
+    width:100%;
+    background:var(--ink-soft);
+    border:1px solid #4A3D2E;
+    color:var(--text);
+    padding:12px 14px;
+    border-radius:var(--radius);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:16px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    text-align:center;
+    margin-bottom:14px;
+  }
+  input[type=text]:focus{outline:1px solid var(--brass); border-color:var(--brass);}
+  .btn{
+    width:100%;
+    padding:12px 0;
+    border-radius:var(--radius);
+    border:none;
+    font-size:14px;
+    font-weight:600;
+    letter-spacing:.5px;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+    transition:.15s;
+  }
+  .btn-primary{ background:var(--brass); color:var(--ink); }
+  .btn-primary:hover{ background:var(--brass-lt); }
+  .btn-ghost{
+    background:transparent;
+    color:var(--text-muted);
+    border:1px solid #4A3D2E;
+  }
+  .btn-ghost:hover{ color:var(--text); border-color:var(--brass);}
+  .lobby-msg{
+    margin-top:14px;
+    font-size:12.5px;
+    color:var(--danger);
+    min-height:16px;
+    text-align:center;
+  }
+
+  /* ---------- Game screen ---------- */
+  .game-wrap{
+    display:none;
+    width:100%;
+    max-width:900px;
+    gap:24px;
+  }
+  .game-wrap.active{ display:flex; }
+  @media (max-width:760px){
+    .game-wrap.active{ flex-direction:column; align-items:center; }
+  }
+
+  .board-col{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+
+  .room-plaque{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    padding:8px 14px;
+    border-radius:20px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .room-plaque .code{
+    letter-spacing:4px;
+    font-weight:600;
+    color:var(--brass-lt);
+    font-size:14px;
+  }
+  .room-plaque button{
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    cursor:pointer;
+    font-size:12px;
+    font-family:'Inter',sans-serif;
+    text-decoration:underline;
+  }
+  .room-plaque button:hover{ color:var(--text); }
+
+  .board{
+    width:min(88vw, 480px);
+    height:min(88vw, 480px);
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    border:10px solid var(--walnut-dk);
+    border-radius:4px;
+    box-shadow:0 24px 60px -24px rgba(0,0,0,.7);
+    position:relative;
+  }
+  .sq{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:clamp(24px, 6.5vw, 40px);
+    cursor:pointer;
+    user-select:none;
+  }
+  .sq.light{ background:var(--ivory); }
+  .sq.dark{ background:var(--walnut); }
+  .sq .piece-w{ color:#FBF6EA; filter:drop-shadow(0 2px 1px rgba(0,0,0,.55)); }
+  .sq .piece-b{ color:#1B1712; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+  .sq.selected{ box-shadow:inset 0 0 0 3px var(--brass); }
+  .sq.last-move{ box-shadow:inset 0 0 0 3px rgba(176,141,87,.55); }
+  .sq .dot{
+    position:absolute;
+    width:26%; height:26%;
+    border-radius:50%;
+    background:rgba(176,141,87,.75);
+    pointer-events:none;
+  }
+  .sq .ring{
+    position:absolute;
+    width:88%; height:88%;
+    border-radius:50%;
+    box-shadow:inset 0 0 0 4px rgba(176,141,87,.65);
+    pointer-events:none;
+  }
+  .coord{
+    position:absolute;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:9px;
+    color:rgba(0,0,0,.35);
+    pointer-events:none;
+  }
+  .coord.file{ bottom:2px; right:4px; }
+  .coord.rank{ top:2px; left:3px; }
+
+  .status-bar{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    letter-spacing:.5px;
+    color:var(--text-muted);
+    min-height:18px;
+    text-align:center;
+  }
+  .status-bar.turn-you{ color:var(--good); }
+  .status-bar.turn-opp{ color:var(--text-muted); }
+  .status-bar.alert{ color:var(--danger); }
+
+  /* ---------- Sidebar ---------- */
+  .side{
+    flex:1;
+    min-width:240px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+    padding:16px 18px;
+  }
+  .panel h3{
+    font-family:'Fraunces',serif;
+    font-size:13px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--brass-lt);
+    margin:0 0 12px;
+    font-weight:600;
+  }
+  .players{ display:flex; flex-direction:column; gap:10px; }
+  .player-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:14px;
+  }
+  .player-row .name{ display:flex; align-items:center; gap:8px; }
+  .player-row .swatch{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--ivory);
+    box-shadow:0 0 0 1px var(--walnut-dk);
+  }
+  .player-row .swatch.black{ background:#1B1712; box-shadow:0 0 0 1px var(--brass); }
+  .player-row .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--text-muted);
+    padding:2px 8px;
+    border:1px solid #4A3D2E;
+    border-radius:10px;
+  }
+  .captured{
+    font-size:18px;
+    min-height:20px;
+    letter-spacing:2px;
+    color:var(--text-muted);
+  }
+
+  .history{
+    max-height:220px;
+    overflow-y:auto;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    line-height:1.9;
+  }
+  .history::-webkit-scrollbar{ width:6px; }
+  .history::-webkit-scrollbar-thumb{ background:#4A3D2E; border-radius:3px; }
+  .history .row{ display:flex; gap:8px; color:var(--text-muted); }
+  .history .row .n{ width:24px; color:#6B5D48; }
+  .history .row .mv{ color:var(--text); }
+  .history .empty{ color:#6B5D48; font-style:italic; }
+
+  .side-actions{ display:flex; flex-direction:column; gap:8px; }
+
+  a.download-link{
+    display:none;
+  }
+</style>
+</head>
+<body>
+
+  <div class="wordmark">
+    <div class="glyph">The All Chess Club</div>
+    <div class="sub">線上西洋棋對弈室 · Demo</div>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="lobby" id="lobby">
+    <h2>開始一局對弈</h2>
+    <p class="hint">建立房間後,把 4 碼房間代碼傳給朋友,對方輸入代碼即可加入,棋步會自動同步。此房間代碼會被暫存於此裝置的瀏覽資料,任何知道代碼的人都能加入,僅供 Demo 測試使用。</p>
+
+    <div class="lobby-tabs">
+      <div class="lobby-tab active" id="tabCreate">建立房間</div>
+      <div class="lobby-tab" id="tabJoin">加入房間</div>
+      <div class="lobby-tab" id="tabLocal">本地對戰</div>
+    </div>
+
+    <div class="field active" id="fieldCreate">
+      <button class="btn btn-primary" id="btnCreate">建立新房間,執白先手</button>
+    </div>
+    <div class="field" id="fieldJoin">
+      <input type="text" id="joinCode" maxlength="4" placeholder="輸入 4 碼房間代碼">
+      <button class="btn btn-primary" id="btnJoin">加入房間,執黑後手</button>
+    </div>
+    <div class="field" id="fieldLocal">
+      <p class="hint" style="margin-top:-4px;">雙方輪流使用同一台裝置下棋,不需要網路同步,適合面對面對弈。</p>
+      <button class="btn btn-primary" id="btnLocal">開始本地對戰</button>
+    </div>
+
+    <div class="lobby-msg" id="lobbyMsg"></div>
+  </div>
+
+  <!-- GAME -->
+  <div class="game-wrap" id="gameWrap">
+    <div class="board-col">
+      <div class="room-plaque">
+        <span>房間</span><span class="code" id="roomCodeLabel">----</span>
+        <button id="copyCodeBtn">複製</button>
+      </div>
+      <div class="board" id="board"></div>
+      <div class="status-bar" id="statusBar">等待對手加入…</div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <h3>對弈雙方</h3>
+        <div class="players">
+          <div class="player-row">
+            <span class="name"><span class="swatch"></span>白方</span>
+            <span class="tag" id="whiteTag">—</span>
+          </div>
+          <div class="player-row">
+            <span class="name"><span class="swatch black"></span>黑方</span>
+            <span class="tag" id="blackTag">等待中</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>被吃掉的棋子</h3>
+        <div class="captured" id="capturedWhite">白方損失:—</div>
+        <div class="captured" id="capturedBlack">黑方損失:—</div>
+      </div>
+
+      <div class="panel">
+        <h3>棋步紀錄</h3>
+        <div class="history" id="history"><div class="empty">尚無棋步</div></div>
+      </div>
+
+      <div class="panel side-actions">
+        <button class="btn btn-ghost" id="btnRematch">再來一局(同房間)</button>
+        <button class="btn btn-ghost" id="btnLeave">離開房間</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const PIECE_UNICODE = {
+    w:{p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'},
+    b:{p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'}
+  };
+  const FILES = ['a','b','c','d','e','f','g','h'];
+
+  let myId = 'p_' + Math.random().toString(36).slice(2,10);
+  let myColor = null;        // 'w' | 'b'
+  let roomCode = null;
+  let game = new Chess();
+  let selectedSq = null;
+  let legalTargets = [];
+  let lastMove = null;
+  let pollTimer = null;
+  let lastSeenUpdate = 0;
+  let syncing = false;
+
+  // ---------- storage helpers ----------
+  async function getRoom(code){
+    try{
+      const res = await window.storage.get('room:' + code, true);
+      return res ? JSON.parse(res.value) : null;
+    }catch(e){ return null; }
+  }
+  async function setRoom(code, data){
+    try{
+      data.updatedAt = Date.now();
+      await window.storage.set('room:' + code, JSON.stringify(data), true);
+      return data;
+    }catch(e){ console.error('storage set failed', e); return null; }
+  }
+
+  function genCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let c = '';
+    for(let i=0;i<4;i++) c += chars[Math.floor(Math.random()*chars.length)];
+    return c;
+  }
+
+  // ---------- lobby ----------
+  const tabCreate = document.getElementById('tabCreate');
+  const tabJoin = document.getElementById('tabJoin');
+  const tabLocal = document.getElementById('tabLocal');
+  const fieldCreate = document.getElementById('fieldCreate');
+  const fieldJoin = document.getElementById('fieldJoin');
+  const fieldLocal = document.getElementById('fieldLocal');
+  const lobbyMsg = document.getElementById('lobbyMsg');
+  const allTabs = [tabCreate, tabJoin, tabLocal];
+  const allFields = [fieldCreate, fieldJoin, fieldLocal];
+
+  function selectTab(tab, field){
+    allTabs.forEach(t=>t.classList.remove('active'));
+    allFields.forEach(f=>f.classList.remove('active'));
+    tab.classList.add('active');
+    field.classList.add('active');
+    lobbyMsg.textContent = '';
+  }
+  tabCreate.onclick = () => selectTab(tabCreate, fieldCreate);
+  tabJoin.onclick = () => selectTab(tabJoin, fieldJoin);
+  tabLocal.onclick = () => selectTab(tabLocal, fieldLocal);
+
+  document.getElementById('btnCreate').onclick = async () => {
+    lobbyMsg.textContent = '建立房間中…';
+    const code = genCode();
+    const data = {
+      fen: new Chess().fen(),
+      whiteId: myId,
+      blackId: null,
+      history: [],
+      status: 'waiting',
+      winner: null
+    };
+    const saved = await setRoom(code, data);
+    if(!saved){ lobbyMsg.textContent = '建立失敗,請再試一次。'; return; }
+    roomCode = code;
+    myColor = 'w';
+    enterGame();
+  };
+
+  document.getElementById('btnJoin').onclick = async () => {
+    const input = document.getElementById('joinCode');
+    const code = input.value.trim().toUpperCase();
+    if(code.length !== 4){ lobbyMsg.textContent = '請輸入 4 碼房間代碼。'; return; }
+    lobbyMsg.textContent = '加入中…';
+    const room = await getRoom(code);
+    if(!room){ lobbyMsg.textContent = '找不到這個房間代碼。'; return; }
+    if(room.blackId && room.blackId !== myId && room.whiteId !== myId){
+      lobbyMsg.textContent = '房間已滿。';
+      return;
+    }
+    if(!room.blackId){
+      room.blackId = myId;
+      room.status = 'playing';
+      await setRoom(code, room);
+    }
+    roomCode = code;
+    myColor = 'b';
+    enterGame();
+  };
+
+  document.getElementById('joinCode').addEventListener('input', (e)=>{
+    e.target.value = e.target.value.toUpperCase();
+  });
+
+  document.getElementById('btnLocal').onclick = () => {
+    roomCode = null;
+    myColor = 'local';
+    game = new Chess();
+    enterGame();
+  };
+
+  // ---------- enter game screen ----------
+  function enterGame(){
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('gameWrap').classList.add('active');
+    buildBoardSkeleton();
+
+    if(myColor === 'local'){
+      document.querySelector('.room-plaque').style.display = 'none';
+      document.querySelector('.players').closest('.panel').style.display = 'none';
+      lastMove = null;
+      selectedSq = null; legalTargets = [];
+      renderBoard();
+      return;
+    }
+
+    document.getElementById('roomCodeLabel').textContent = roomCode;
+    syncFromRoom(true);
+    pollTimer = setInterval(()=>syncFromRoom(false), 1500);
+  }
+
+  document.getElementById('copyCodeBtn').onclick = () => {
+    navigator.clipboard.writeText(roomCode).then(()=>{
+      const btn = document.getElementById('copyCodeBtn');
+      const old = btn.textContent;
+      btn.textContent = '已複製';
+      setTimeout(()=>btn.textContent = old, 1200);
+    });
+  };
+
+  document.getElementById('btnLeave').onclick = () => {
+    clearInterval(pollTimer);
+    location.reload();
+  };
+
+  document.getElementById('btnRematch').onclick = async () => {
+    if(myColor === 'local'){
+      game = new Chess();
+      lastMove = null;
+      selectedSq = null; legalTargets = [];
+      renderBoard();
+      return;
+    }
+    if(myColor !== 'w') return;
+    const room = await getRoom(roomCode);
+    if(!room) return;
+    room.fen = new Chess().fen();
+    room.history = [];
+    room.status = 'playing';
+    room.winner = null;
+    await setRoom(roomCode, room);
+    syncFromRoom(true);
+  };
+
+  // ---------- board rendering ----------
+  const boardEl = document.getElementById('board');
+  function buildBoardSkeleton(){
+    boardEl.innerHTML = '';
+    const flip = myColor === 'b';
+    for(let r=0;r<8;r++){
+      for(let c=0;c<8;c++){
+        const rank = flip ? r+1 : 8-r;
+        const fileIdx = flip ? 7-c : c;
+        const file = FILES[fileIdx];
+        const sqName = file + rank;
+        const div = document.createElement('div');
+        div.className = 'sq ' + (((r+c)%2===0) ? 'light' : 'dark');
+        div.dataset.sq = sqName;
+        div.onclick = () => onSquareClick(sqName);
+        if(c===0){
+          const rk = document.createElement('span');
+          rk.className = 'coord rank'; rk.textContent = rank;
+          div.appendChild(rk);
+        }
+        if(r===7){
+          const fl = document.createElement('span');
+          fl.className = 'coord file'; fl.textContent = file;
+          div.appendChild(fl);
+        }
+        boardEl.appendChild(div);
+      }
+    }
+  }
+
+  function renderBoard(){
+    const board = game.board(); // 8x8, row0 = rank8
+    document.querySelectorAll('.sq').forEach(sqEl=>{
+      sqEl.querySelectorAll('.piece-w,.piece-b,.dot,.ring').forEach(n=>n.remove());
+      sqEl.classList.remove('selected','last-move');
+      const sqName = sqEl.dataset.sq;
+      const file = sqName[0];
+      const rank = parseInt(sqName[1],10);
+      const col = FILES.indexOf(file);
+      const row = 8 - rank;
+      const piece = board[row][col];
+      if(piece){
+        const span = document.createElement('span');
+        span.className = piece.color === 'w' ? 'piece-w' : 'piece-b';
+        span.textContent = PIECE_UNICODE[piece.color][piece.type];
+        sqEl.appendChild(span);
+      }
+      if(lastMove && (sqName === lastMove.from || sqName === lastMove.to)){
+        sqEl.classList.add('last-move');
+      }
+      if(selectedSq === sqName) sqEl.classList.add('selected');
+      if(legalTargets.includes(sqName)){
+        const marker = document.createElement('div');
+        const hasPiece = !!piece;
+        marker.className = hasPiece ? 'ring' : 'dot';
+        sqEl.appendChild(marker);
+      }
+    });
+    updateStatusBar();
+    updateCaptured();
+    updateHistory();
+    updatePlayers();
+  }
+
+  function onSquareClick(sqName){
+    if(!myColor) return;
+    if(game.game_over()) return;
+    const controllable = myColor === 'local' ? game.turn() : myColor;
+    if(game.turn() !== controllable) return; // not your turn
+
+    const piece = game.get(sqName);
+
+    if(selectedSq){
+      if(legalTargets.includes(sqName)){
+        makeMove(selectedSq, sqName);
+        selectedSq = null; legalTargets = [];
+        renderBoard();
+        return;
+      }
+    }
+    if(piece && piece.color === controllable){
+      selectedSq = sqName;
+      legalTargets = game.moves({square:sqName, verbose:true}).map(m=>m.to);
+    }else{
+      selectedSq = null; legalTargets = [];
+    }
+    renderBoard();
+  }
+
+  async function makeMove(from, to){
+    const moveObj = { from, to, promotion:'q' };
+    const result = game.move(moveObj);
+    if(!result) return;
+    lastMove = { from, to };
+    renderBoard();
+
+    if(myColor === 'local') return; // no network sync needed
+
+    const room = await getRoom(roomCode) || {};
+    room.fen = game.fen();
+    room.history = game.history();
+    room.status = game.game_over() ? 'finished' : 'playing';
+    if(game.in_checkmate()){
+      room.winner = (game.turn() === 'w') ? 'black' : 'white';
+    }else if(game.game_over()){
+      room.winner = 'draw';
+    }
+    await setRoom(roomCode, room);
+  }
+
+  async function syncFromRoom(force){
+    if(syncing) return;
+    syncing = true;
+    const room = await getRoom(roomCode);
+    syncing = false;
+    if(!room) return;
+
+    if(force || room.updatedAt !== lastSeenUpdate){
+      lastSeenUpdate = room.updatedAt || 0;
+      if(room.fen !== game.fen()){
+        game = new Chess(room.fen);
+        const hist = room.history || [];
+        if(hist.length){
+          // derive last move from verbose replay for highlight purposes
+          const tmp = new Chess();
+          let lm = null;
+          hist.forEach(san=>{ lm = tmp.move(san); });
+          lastMove = lm ? {from:lm.from, to:lm.to} : null;
+        }else{
+          lastMove = null;
+        }
+      }
+      window.__lastRoom = room;
+      selectedSq = null; legalTargets = [];
+      renderBoard();
+    }
+  }
+
+  // ---------- UI updates ----------
+  function updateStatusBar(){
+    const bar = document.getElementById('statusBar');
+    const room = window.__lastRoom;
+    bar.classList.remove('turn-you','turn-opp','alert');
+
+    if(room && room.status === 'waiting'){
+      bar.textContent = '等待對手加入…';
+      return;
+    }
+    if(game.in_checkmate()){
+      const winner = game.turn() === 'w' ? '黑方' : '白方';
+      bar.textContent = `將死!${winner} 獲勝`;
+      bar.classList.add('alert');
+      return;
+    }
+    if(game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()){
+      bar.textContent = '和局';
+      bar.classList.add('alert');
+      return;
+    }
+    const turn = game.turn();
+    const turnLabel = turn === 'w' ? '白方' : '黑方';
+    let text = `輪到${turnLabel}走棋`;
+    if(game.in_check()) text += '(將軍!)';
+    if(myColor === 'local'){
+      bar.textContent = text;
+      bar.classList.add('turn-you');
+    }else{
+      const isMyTurn = turn === myColor;
+      bar.textContent = isMyTurn ? `${text} — 該你了` : text;
+      bar.classList.add(isMyTurn ? 'turn-you' : 'turn-opp');
+    }
+  }
+
+  function updateCaptured(){
+    const hist = game.history({verbose:true});
+    const takenByWhite = []; // black pieces captured
+    const takenByBlack = []; // white pieces captured
+    hist.forEach(m=>{
+      if(m.captured){
+        const glyph = PIECE_UNICODE[m.color === 'w' ? 'b' : 'w'][m.captured];
+        if(m.color === 'w') takenByWhite.push(glyph); else takenByBlack.push(glyph);
+      }
+    });
+    document.getElementById('capturedWhite').textContent = '白方吃掉:' + (takenByWhite.join(' ') || '—');
+    document.getElementById('capturedBlack').textContent = '黑方吃掉:' + (takenByBlack.join(' ') || '—');
+  }
+
+  function updateHistory(){
+    const el = document.getElementById('history');
+    const hist = game.history();
+    if(!hist.length){ el.innerHTML = '<div class="empty">尚無棋步</div>'; return; }
+    let html = '';
+    for(let i=0;i<hist.length;i+=2){
+      const n = (i/2)+1;
+      const w = hist[i] || '';
+      const b = hist[i+1] || '';
+      html += `<div class="row"><span class="n">${n}.</span><span class="mv">${w}</span><span class="mv">${b}</span></div>`;
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function updatePlayers(){
+    const room = window.__lastRoom;
+    if(!room) return;
+    document.getElementById('whiteTag').textContent = room.whiteId ? (room.whiteId===myId ? '你' : '玩家') : '—';
+    document.getElementById('blackTag').textContent = room.blackId ? (room.blackId===myId ? '你' : '玩家') : '等待中';
+  }
+
+})();
+</script>
+</body>
+</html>
